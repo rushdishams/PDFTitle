@@ -105,6 +105,7 @@ public class PdfDataExtractor {
 					}
 					else {
 						title = entry.getValue().toString().trim();
+						
 						while(title.trim().length() < TITLE_MIN_LENGTH || isNumber(title)) {
 							entry = map.higherEntry(entry.getKey());
 							if(entry == null) {
