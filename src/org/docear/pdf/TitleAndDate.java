@@ -1,45 +1,63 @@
 package org.docear.pdf;
 
 import java.io.File;
-
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.logging.FileHandler;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.io.FileUtils;
 import org.apache.pdfbox.exceptions.CryptographyException;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentInformation;
+import org.apache.pdfbox.util.PDFTextStripper;
 
 /**
-* Licensed to the Apache Software Foundation (ASF) under one or more
-* contributor license agreements.  See the NOTICE file distributed with
-* this work for additional information regarding copyright ownership.
-* The ASF licenses this file to You under the Apache License, Version 2.0
-* (the "License"); you may not use this file except in compliance with
-* the License.  You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and 
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
 
 /**
  * This program takes a PDF file name as input and uses DocEar API to generate its title.
- * The title is then added with the creation date of the PDF.
- * @author rushdi.shams, 28/07/2015
- * @version 0.1.0
+ * The title is then added with the creation date or custom date of the PDF. The contents
+ * of the PDF are then extracted using Apache PDFBox and their digest is created using 
+ * Apache Codec. Finally these three information are combined to generate the title. The PDF
+ * file is renamed only if no other PDF with the same name exists. The .txt file is saved 
+ * only if the PDF file is renamed and no other .txt file with the same name exists. 
+ * 
+ * 
+ * @author rushdi.shams, 06/08/2015
+ * @version 1.0.0
+ * 
+ * CHANGE:
+ * - Functionality changes:
+ * 1. Title is generated using PDF title (DocEar) + date + digest (Apache Codec)
+ * 2. date is based on creation date. If not found then custom date
+ * 3. If a PDF is present with the new title (duplicate), do nothing
+ * 4. Also, create a text file with the PDF contents but do not create one in the file system if a pdf with this name is alreay there
  *
  */
 public class TitleAndDate {
 	/*logger variable*/
 	private static Logger logger = Logger.getLogger("MyLog");
-	
+
 	/**
 	 * This method gets rid of the characters from the file title that are not
 	 * supported by Windows in a file name
@@ -47,7 +65,7 @@ public class TitleAndDate {
 	 * @return String without invalid characters in Windows file name system
 	 */
 	public static String cleanTitle(String title){
-		return title.replaceAll("[^a-zA-Z0-9.-]", "_");
+		return title.replaceAll("[^a-zA-Z0-9.-]", "_").replace("_", " ");
 	}
 
 	/**
@@ -73,11 +91,11 @@ public class TitleAndDate {
 	}
 
 	/**
-	 * This method extracts creation date of a PDF file
+	 * This method extracts creation date/ custom date of a PDF file
 	 * @param file is a File object
-	 * @return String that contains the creation date of the PDF
+	 * @return String that contains the creation date/ custom date of the PDF
 	 */
-	public static String extractCreationDate(File file){
+	public static String extractDate(File file){
 		PDDocument document = null;
 		boolean isDamaged = false; //to deal with damaged pdf
 		String creationDateMetaData = "";
@@ -99,8 +117,10 @@ public class TitleAndDate {
 					}
 
 				}/*<--work around to decrypt an encrypted pdf ends here*/
+				
 				/*Metadata extraction --->*/
 				PDDocumentInformation info = document.getDocumentInformation();
+
 				/*We are only interested in date data--->*/
 				Calendar calendar = info.getCreationDate();
 				int creationYear = 0, creationMonth = 0, creationDate = 0;
@@ -110,8 +130,34 @@ public class TitleAndDate {
 					creationDate = calendar.get(Calendar.DATE);
 
 				}/*<---Date data extraction complete*/
-				
-				creationDateMetaData = creationYear + "-" + creationMonth + "-" + creationDate;
+
+				/*If creation date is not empty --->*/
+				if(creationYear != 0){
+					creationDateMetaData = creationYear + "-" + creationMonth + "-" + creationDate;
+				}//<--- creation date found and the date part of the title is generated
+				/*No creation date is found --->*/
+				else{
+					SimpleDateFormat dateFormatter = new SimpleDateFormat("MM/dd/yyyy");
+					Date customDate = null;
+					/*But we have custom date some times --->*/
+					try {
+						customDate = dateFormatter.parse(info.getCustomMetadataValue("customdate"));
+					} catch (ParseException e) {
+						logger.info("Error parsing date from custom date");
+					}
+					calendar = Calendar.getInstance();
+					calendar.setTime(customDate);
+					if(calendar != null){
+						creationYear = calendar.get(Calendar.YEAR);
+						creationMonth = calendar.get(Calendar.MONTH);
+						creationDate = calendar.get(Calendar.DATE);
+
+					}/*<---Date data extraction complete from customdate*/
+					if(creationYear != 0){
+						creationDateMetaData = creationYear + "-" + creationMonth + "-" + creationDate;
+					}
+				}//<--- work around if no creation date is found
+
 			} /*<--- Good to know that the PDF was not damaged*/
 		} catch (IOException e) { /*If the PDF was not read by the system --->*/
 			logger.info("Error processing file " + file.getName());
@@ -137,8 +183,8 @@ public class TitleAndDate {
 	 * @param creationDate is a String
 	 * @return a String that is the final title of the PDF
 	 */
-	public static String makeTitle(String title, String creationDate){
-		return title + "_" + creationDate;
+	public static String makeTitle(String title, String creationDate, String digest){
+		return title + "_" + creationDate + "_" + digest;
 	}
 
 	/**
@@ -146,12 +192,17 @@ public class TitleAndDate {
 	 * @param file is a File object
 	 * @param finalTitle is a String
 	 */
-	public static void renameFile(File file, String finalTitle){
+	public static boolean renameFile(File file, String finalTitle){
 		File fileWithTitle = new File(file.getParentFile().getAbsolutePath()+ "/" + finalTitle + ".pdf");
 		if(!fileWithTitle.exists()){
 			logger.info("Renaming " + file.getName() + "-->" + fileWithTitle.getName());
 			logger.info("\n\n");
 			file.renameTo(fileWithTitle);
+			return true;
+		}
+		else{
+			logger.info("Renaming failed. File " + file.getName() + " already exists");
+			return false;
 		}
 	}
 
@@ -175,6 +226,91 @@ public class TitleAndDate {
 			e.printStackTrace();
 		}
 	}
+	
+	/**
+	 * Method to extract text from PDF using Apache PDFBox
+	 * @param file is a File object that indicates the PDF file
+	 * @return the extracted content of the PDF file as String
+	 */
+	public static String extractPDFText(File file){
+		PDDocument pd = null;
+		String content = "";
+		//Load the PDF --->
+		try {
+			pd = PDDocument.load(file);
+		} catch (IOException e) {
+			logger.info("Error loading PDF file: " + file.getAbsolutePath());
+		} //<--- pdf is loaded
+		
+		if (pd.isEncrypted()){
+			logger.info(file.getAbsolutePath() + " is encrypted. Trying to decrypt...");
+			try {
+				pd.decrypt("");
+				pd.setAllSecurityToBeRemoved(true);
+			} catch (CryptographyException | IOException e) {
+				logger.info("Error decrypting file: " + file.getAbsolutePath());
+			}
+		}//<--work around to decrypt an encrypted pdf ends here
+		
+		PDFTextStripper stripper = null;
+		try {
+			stripper = new PDFTextStripper();	
+			content = stripper.getText(pd);
+		} catch (IOException e) {
+			logger.info("Error stripping file: " + file.getAbsolutePath());
+		}
+				
+		/*Let's close the buffers --->*/
+		try {
+			pd.close();
+		} catch (IOException e) {
+			logger.info("Error closing PDF Document object");
+		}
+		
+		return content;
+	}// Method to extract and return PDF content has ended.
+	
+	/**
+	 * Method to generate and return digest of the PDF contents
+	 * @param content in String which is actually the digest of the file
+	 * @return String, the digest of the input file
+	 */
+	public static String getDocumentDigest(String content){
+		logger.info("Returning digest");
+		return DigestUtils.sha1Hex(content);
+	}
+	
+	/**
+	 * Method to write text files (the content of the PDF files)
+	 * @param String fileAbsolutePath is the directory of the PDF files
+	 * @param String finalTitle is the new name of the PDF
+	 * @param String content of the PDF file in String format 
+	 */
+	public static void writeTextFile(String fileAbsolutePath, String finalTitle, String content){
+		File textFile = new File(fileAbsolutePath + "/" + finalTitle + ".txt");
+		if(!textFile.exists()){
+			logger.info("Creating a text file-->" + finalTitle);
+			logger.info("\n\n");
+			try {
+				FileUtils.writeStringToFile(textFile, content);
+			} catch (IOException e) {
+				logger.info("Error creating file " + textFile);
+			}
+		}
+		else{
+			logger.info("File " + textFile.getName() + " already exists");
+		}
+	}
+	
+	/**
+	 * Method to display banner on cmd line
+	 */
+	public static void showBanner(){
+		System.out.println("//----------------------------------------------------------------------------//");
+		System.out.println("\tPDF Renaming and Duplicate Removal Filter v-1.0.0, 06/08/2015");
+		System.out.println("\t\t\tAuthor: Rushdi Shams");
+		System.out.println("//----------------------------------------------------------------------------//");
+	}
 
 	/**
 	 * Driver method for the class
@@ -182,7 +318,7 @@ public class TitleAndDate {
 	 */
 	public static void main(String[] args) {
 
-
+		showBanner();
 		File file = new File(args[0]);
 		initiateLogger(file);
 		if(!args[0].endsWith(".pdf")){
@@ -191,10 +327,13 @@ public class TitleAndDate {
 		}
 		String title = extractTitle(file);
 		String creationDate = "";
-		creationDate = extractCreationDate(file);
-		String finalTitle = makeTitle(title, creationDate);
-		renameFile(file, finalTitle);
-
+		creationDate = extractDate(file);
+		String content = extractPDFText(file);
+		String digest = getDocumentDigest(content.trim());
+		String finalTitle = makeTitle(title, creationDate, digest);
+		boolean renamingSuccess = renameFile(file, finalTitle);
+		if(renamingSuccess){
+			writeTextFile(file.getParentFile().getAbsolutePath(), finalTitle, content);
+		}
 	}
-
 }/*End of class*/
