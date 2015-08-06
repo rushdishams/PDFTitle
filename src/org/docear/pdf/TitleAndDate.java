@@ -50,8 +50,8 @@ import org.apache.pdfbox.util.PDFTextStripper;
  * - Functionality changes:
  * 1. Title is generated using PDF title (DocEar) + date + digest (Apache Codec)
  * 2. date is based on creation date. If not found then custom date
- * 3. If a PDF is present with the new title (duplicate), do nothing
- * 4. Also, create a text file with the PDF contents but do not create one in the file system if a pdf with this name is alreay there
+ * 3. If a PDF is present with the new title (duplicate), delete the PDF
+ * 4. Also, create a text file with the PDF contents but do not create one in the file system if a pdf with this name is already there
  *
  */
 public class TitleAndDate {
@@ -201,7 +201,13 @@ public class TitleAndDate {
 			return true;
 		}
 		else{
-			logger.info("Renaming failed. File " + file.getName() + " already exists");
+			logger.info("Renaming failed. File " + fileWithTitle + " already exists");
+			try {
+				logger.info("Deleting " + file.getName());
+				FileUtils.forceDelete(file);
+			} catch (IOException e) {
+				logger.info(file.getName() + "could not be force deleted");
+			}
 			return false;
 		}
 	}
@@ -309,6 +315,7 @@ public class TitleAndDate {
 		System.out.println("//----------------------------------------------------------------------------//");
 		System.out.println("\tPDF Renaming and Duplicate Removal Filter v-1.0.0, 06/08/2015");
 		System.out.println("\t\t\tAuthor: Rushdi Shams");
+		System.out.println("\tUSAGE: java -jar titleanddate-1.0.0.jar directorypath/filename.pdf");
 		System.out.println("//----------------------------------------------------------------------------//");
 	}
 
