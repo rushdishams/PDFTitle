@@ -136,7 +136,7 @@ public class TitleAndDate {
 				int creationYear = 0, creationMonth = 0, creationDate = 0;
 				if(calendar != null){
 					creationYear = calendar.get(Calendar.YEAR);
-					creationMonth = calendar.get(Calendar.MONTH);
+					creationMonth = calendar.get(Calendar.MONTH) + 1;
 					creationDate = calendar.get(Calendar.DATE);
 
 				}/*<---Date data extraction complete*/
@@ -159,7 +159,7 @@ public class TitleAndDate {
 					calendar.setTime(customDate);
 					if(calendar != null){
 						creationYear = calendar.get(Calendar.YEAR);
-						creationMonth = calendar.get(Calendar.MONTH);
+						creationMonth = calendar.get(Calendar.MONTH) + 1;
 						creationDate = calendar.get(Calendar.DATE);
 
 					}/*<---Date data extraction complete from customdate*/
