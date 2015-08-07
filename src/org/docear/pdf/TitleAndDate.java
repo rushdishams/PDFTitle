@@ -44,7 +44,7 @@ import org.apache.pdfbox.util.PDFTextStripper;
  * 
  * 
  * @author rushdi.shams, 07/08/2015
- * @version 1.1.0
+ * @version 1.2.0
  * 
  * CHANGE:
  * - Functionality changes:
