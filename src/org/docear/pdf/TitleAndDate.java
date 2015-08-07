@@ -43,8 +43,8 @@ import org.apache.pdfbox.util.PDFTextStripper;
  * only if the PDF file is renamed and no other .txt file with the same name exists. 
  * 
  * 
- * @author rushdi.shams, 06/08/2015
- * @version 1.0.0
+ * @author rushdi.shams, 07/08/2015
+ * @version 1.1.0
  * 
  * CHANGE:
  * - Functionality changes:
@@ -57,16 +57,26 @@ import org.apache.pdfbox.util.PDFTextStripper;
 public class TitleAndDate {
 	/*logger variable*/
 	private static Logger logger = Logger.getLogger("MyLog");
+	private static final int MAX_CHAR = 50;
 
 	/**
 	 * This method gets rid of the characters from the file title that are not
-	 * supported by Windows in a file name
+	 * supported by Windows in a file name. The method also chops off the title
+	 * so that it stays within MAX_CHAR. If the title length is less than
+	 * MAX_CHAR, then the maximum character is set to the length of the title.
 	 * @param title String
 	 * @return String without invalid characters in Windows file name system
 	 */
 	public static String cleanTitle(String title){
-		return title.replaceAll("[^a-zA-Z0-9.-]", "_").replace("_", " ");
-	}
+		title = title.replaceAll("[^a-zA-Z0-9.-]", "_").replace("_", " ");
+		int maxLength = (title.length() <= MAX_CHAR)?title.length():MAX_CHAR;
+
+		if(title.length() > MAX_CHAR){
+			logger.info("The title generated was more than MAXIMUM CHARACTER. Chopping off!");
+		}
+		return title.substring(0, maxLength);
+//		return title;
+		}
 
 	/**
 	 * This method extracts title from a PDF using DocEar API
@@ -313,9 +323,9 @@ public class TitleAndDate {
 	 */
 	public static void showBanner(){
 		System.out.println("//----------------------------------------------------------------------------//");
-		System.out.println("\tPDF Renaming and Duplicate Removal Filter v-1.0.0, 06/08/2015");
+		System.out.println("\tPDF Renaming and Duplicate Removal Filter v-1.1.0, 07/08/2015");
 		System.out.println("\t\t\tAuthor: Rushdi Shams");
-		System.out.println("\tUSAGE: java -jar titleanddate-1.0.0.jar directorypath/filename.pdf");
+		System.out.println("\tUSAGE: java -jar titleanddate-1.1.0.jar directorypath/filename.pdf");
 		System.out.println("//----------------------------------------------------------------------------//");
 	}
 
