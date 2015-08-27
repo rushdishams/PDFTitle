@@ -17,6 +17,8 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentInformation;
 import org.apache.pdfbox.util.PDFTextStripper;
 
+import com.foxit.gsdk.PDFException;
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -43,15 +45,12 @@ import org.apache.pdfbox.util.PDFTextStripper;
  * only if the PDF file is renamed and no other .txt file with the same name exists. 
  * 
  * 
- * @author rushdi.shams, 07/08/2015
- * @version 1.2.0
+ * @author rushdi.shams, 14/08/2015
+ * @version 1.3.0
  * 
  * CHANGE:
- * - Functionality changes:
- * 1. Title is generated using PDF title (DocEar) + date + digest (Apache Codec)
- * 2. date is based on creation date. If not found then custom date
- * 3. If a PDF is present with the new title (duplicate), delete the PDF
- * 4. Also, create a text file with the PDF contents but do not create one in the file system if a pdf with this name is already there
+ * - PDF data extraction is now relying on docear. This is to save time. Otherwise, we were converting it 
+ * twice!
  *
  */
 public class TitleAndDate {
@@ -249,41 +248,34 @@ public class TitleAndDate {
 	 * @return the extracted content of the PDF file as String
 	 */
 	public static String extractPDFText(File file){
-		PDDocument pd = null;
+		PdfDataExtractor extractor = new PdfDataExtractor(file);
 		String content = "";
-		//Load the PDF --->
 		try {
-			pd = PDDocument.load(file);
+			content = extractor.extractPlainText();
+			logger.info("PDF text extracted from " + file.getName() + "\n");
 		} catch (IOException e) {
-			logger.info("Error loading PDF file: " + file.getAbsolutePath());
-		} //<--- pdf is loaded
-		
-		if (pd.isEncrypted()){
-			logger.info(file.getAbsolutePath() + " is encrypted. Trying to decrypt...");
-			try {
-				pd.decrypt("");
-				pd.setAllSecurityToBeRemoved(true);
-			} catch (CryptographyException | IOException e) {
-				logger.info("Error decrypting file: " + file.getAbsolutePath());
-			}
-		}//<--work around to decrypt an encrypted pdf ends here
-		
-		PDFTextStripper stripper = null;
-		try {
-			stripper = new PDFTextStripper();	
-			content = stripper.getText(pd);
-		} catch (IOException e) {
-			logger.info("Error stripping file: " + file.getAbsolutePath());
+			logger.info("Error extracting PDF text from " + file.getName() + "\n");
 		}
-				
-		/*Let's close the buffers --->*/
-		try {
-			pd.close();
-		} catch (IOException e) {
-			logger.info("Error closing PDF Document object");
-		}
-		
 		return content;
+	}// Method to extract and return PDF content has ended.
+	
+	/**
+	 * Method to extract text from PDF using Apache PDFBox
+	 * @param file is a File object that indicates the PDF file
+	 * @return the extracted content of the PDF file as String
+	 */
+	public static String extractFoxitText(String file){
+		Parse test = new Parse();
+		test.initLib();
+		String PDFContent = "";
+		try {
+			PDFContent = test.pdfOperation(file);
+		} catch (PDFException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		test.release();
+		return PDFContent;
 	}// Method to extract and return PDF content has ended.
 	
 	/**
@@ -323,9 +315,9 @@ public class TitleAndDate {
 	 */
 	public static void showBanner(){
 		System.out.println("//----------------------------------------------------------------------------//");
-		System.out.println("\tPDF Renaming and Duplicate Removal Filter v-1.1.0, 07/08/2015");
+		System.out.println("\tPDF Renaming and Duplicate Removal Filter v-1.4.0, 27/08/2015");
 		System.out.println("\t\t\tAuthor: Rushdi Shams");
-		System.out.println("\tUSAGE: java -jar titleanddate-1.1.0.jar directorypath/filename.pdf");
+		System.out.println("\tUSAGE: java -jar titleanddate-1.4.0.jar directorypath/filename.pdf");
 		System.out.println("//----------------------------------------------------------------------------//");
 	}
 
@@ -334,7 +326,6 @@ public class TitleAndDate {
 	 * @param args contains the file path and name
 	 */
 	public static void main(String[] args) {
-
 		showBanner();
 		File file = new File(args[0]);
 		initiateLogger(file);
@@ -343,14 +334,14 @@ public class TitleAndDate {
 			System.exit(1);
 		}
 		String title = extractTitle(file);
-		String creationDate = "";
-		creationDate = extractDate(file);
-		String content = extractPDFText(file);
+		String creationDate = extractDate(file);
+//		String content = extractPDFText(file);
+		String content = extractFoxitText(args[0]);
 		String digest = getDocumentDigest(content.trim());
 		String finalTitle = makeTitle(title, creationDate, digest);
 		boolean renamingSuccess = renameFile(file, finalTitle);
 		if(renamingSuccess){
 			writeTextFile(file.getParentFile().getAbsolutePath(), finalTitle, content);
 		}
-	}
+	}/*End of driver method*/
 }/*End of class*/
