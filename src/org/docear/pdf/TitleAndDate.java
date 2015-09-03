@@ -1,7 +1,11 @@
 package org.docear.pdf;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -16,8 +20,20 @@ import org.apache.pdfbox.exceptions.CryptographyException;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentInformation;
 import org.apache.pdfbox.util.PDFTextStripper;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.parser.pdf.PDFParser;
+import org.apache.tika.sax.BodyContentHandler;
+import org.xml.sax.ContentHandler;
 
 import com.foxit.gsdk.PDFException;
+import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.parser.PdfReaderContentParser;
+import com.itextpdf.text.pdf.parser.SimpleTextExtractionStrategy;
+import com.itextpdf.text.pdf.parser.TextExtractionStrategy;
+import com.snowtide.PDF;
+import com.snowtide.pdf.Document;
+import com.snowtide.pdf.OutputTarget;
 
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -46,7 +62,7 @@ import com.foxit.gsdk.PDFException;
  * 
  * 
  * @author rushdi.shams, 14/08/2015
- * @version 1.3.0
+ * @version 1.7.0
  * 
  * CHANGE:
  * - PDF data extraction is now relying on docear. This is to save time. Otherwise, we were converting it 
@@ -278,6 +294,70 @@ public class TitleAndDate {
 		return PDFContent;
 	}// Method to extract and return PDF content has ended.
 	
+	public static String extractPDFExtremeText(String file){
+		Document pdf = PDF.open(file);
+	    StringBuilder text = new StringBuilder();
+	    pdf.pipe(new OutputTarget(text));
+	    try {
+			pdf.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	    return text.toString();
+	}
+	
+	public static String extractTikaText(String file){
+		InputStream is = null;
+		ContentHandler contenthandler = null;
+	    try {
+	      is = new FileInputStream(file);
+	      contenthandler = new BodyContentHandler();
+	      Metadata metadata = new Metadata();
+	      PDFParser pdfparser = new PDFParser();
+	      pdfparser.parse(is, contenthandler, metadata, new ParseContext());
+	      
+	    }
+	    catch (Exception e) {
+	      e.printStackTrace();
+	    }
+	    finally {
+	        if (is != null)
+				try {
+					is.close();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+	    }
+	    return contenthandler.toString();
+	}
+	
+	public static String extractITextText(String pdf){
+		PdfReader reader = null;
+		try {
+			reader = new PdfReader(pdf);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+        PdfReaderContentParser parser = new PdfReaderContentParser(reader);
+        TextExtractionStrategy strategy;
+        String text = "";
+        for (int i = 1; i <= reader.getNumberOfPages(); i++) {
+            try {
+				strategy = parser.processContent(i, new SimpleTextExtractionStrategy());
+				text += strategy.getResultantText();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+        }
+        reader.close();
+        
+        return text;
+	}
+	
 	/**
 	 * Method to generate and return digest of the PDF contents
 	 * @param content in String which is actually the digest of the file
@@ -315,9 +395,9 @@ public class TitleAndDate {
 	 */
 	public static void showBanner(){
 		System.out.println("//----------------------------------------------------------------------------//");
-		System.out.println("\tPDF Renaming and Duplicate Removal Filter v-1.4.0, 27/08/2015");
+		System.out.println("\tPDF Renaming and Duplicate Removal Filter v-1.7.0 (Tika), 01/09/2015");
 		System.out.println("\t\t\tAuthor: Rushdi Shams");
-		System.out.println("\tUSAGE: java -jar titleanddate-1.4.0.jar directorypath/filename.pdf");
+		System.out.println("\tUSAGE: java -jar titleanddate-1.7.0.jar directorypath/filename.pdf");
 		System.out.println("//----------------------------------------------------------------------------//");
 	}
 
@@ -329,14 +409,18 @@ public class TitleAndDate {
 		showBanner();
 		File file = new File(args[0]);
 		initiateLogger(file);
-		if(!args[0].endsWith(".pdf")){
+		/*if(!args[0].endsWith(".pdf")){
+			logger.info(file.toString());
 			logger.info("Input must be a PDF. Exiting!");
 			System.exit(1);
-		}
+		}*/
 		String title = extractTitle(file);
 		String creationDate = extractDate(file);
 //		String content = extractPDFText(file);
-		String content = extractFoxitText(args[0]);
+//		String content = extractFoxitText(args[0]);
+//		String content = extractPDFExtremeText(args[0]);
+//		String content = extractITextText(args[0]);
+		String content = extractTikaText(args[0]);
 		String digest = getDocumentDigest(content.trim());
 		String finalTitle = makeTitle(title, creationDate, digest);
 		boolean renamingSuccess = renameFile(file, finalTitle);
